@@ -13,10 +13,8 @@ app.listen(PORT, () => {
   console.log(`Servidor web iniciado na porta ${PORT}`);
 });
 
-// Configuração do ambiente
 dotenv.config();
 
-// Configurações MQTT
 const MQTT_CONFIG = {
   url: process.env.MQTT_URL || 'mqtt://broker.hivemq.com',
   topics: {
@@ -27,16 +25,11 @@ const MQTT_CONFIG = {
   }
 };
 
-// Inicialização do Bot do Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
-
-// Conexão MQTT
 const mqttClient = mqtt.connect(MQTT_CONFIG.url);
 
-// Armazenamento local dos alarmes
 let alarmes = [];
 
-// Comandos do bot
 bot.onText(/\/start/, (msg) => {
   const welcomeMsg = `💊 *Sistema de Lembrete de Medicamentos*\n\n` +
                     `/add - Adicionar novo alarme\n` +
@@ -79,12 +72,11 @@ bot.onText(/\/list/, (msg) => {
 });
 
 bot.onText(/\/clear/, (msg) => {
-  mqttClient.publish(MQTT_CONFIG.topics.clear, '1');
+  mqttClient.publish(MQTT_CONFIG.topics.clear, 'clear_all');
   alarmes = [];
-  bot.sendMessage(msg.chat.id, "Todos os alarmes foram removidos.");
+  bot.sendMessage(msg.chat.id, "Todos os alarmes foram removidos com sucesso.");
 });
 
-// Tratamento MQTT
 mqttClient.on('connect', () => {
   console.log('Conectado ao MQTT');
   mqttClient.subscribe(Object.values(MQTT_CONFIG.topics));
@@ -93,13 +85,11 @@ mqttClient.on('connect', () => {
 mqttClient.on('message', (topic, message) => {
   const msg = message.toString();
   
-  if (topic === MQTT_CONFIG.topics.status) {
-    // Tratar status do dispositivo
-    console.log(`Status: ${msg}`);
+  if (topic === MQTT_CONFIG.topics.clear && msg === 'clear_all') {
+    alarmes = [];
   }
 });
 
-// Tratamento de erros
 mqttClient.on('error', (err) => {
   console.error('Erro MQTT:', err);
 });
