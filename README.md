@@ -85,5 +85,4 @@ const char* mqtt_server = "broker.hivemq.com";
 
 ---
 
-## 👨‍💻 Autor
-Projeto desenvolvido para estudo e aplicação prática de **sistemas embarcados** e **IoT**.  
+Projeto desenvolvido para estudo e aplicação prática de **sistemas embarcados** .  
