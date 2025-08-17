@@ -1,0 +1,17 @@
+{
+  "name": "medicamento-bot",
+  "version": "1.0.0",
+  "main": "medicamento-bot.js",
+  "scripts": {
+    "start": "node medicamento-bot.js",
+    "dev": "nodemon medicamento-bot.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "mqtt": "^5.0.3",
+    "node-telegram-bot-api": "^0.61.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
