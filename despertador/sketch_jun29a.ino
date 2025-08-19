@@ -17,6 +17,8 @@ void addAlarm(int hour, int minute, String medicine);
 void reconnect();
 void triggerAlarm();
 void checkAlarms();
+void updateAlarm();
+void cancelAlarm();
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -53,6 +55,21 @@ PubSubClient client(espClient);
 bool alarmActive = false;
 unsigned long lastDisplayUpdate = 0;
 const unsigned long displayUpdateInterval = 1000;
+
+enum AlarmState {
+  ALARM_OFF,
+  ALARM_BUZZER_ON,
+  ALARM_BUZZER_OFF
+};
+
+AlarmState alarmState = ALARM_OFF;
+unsigned long alarmStartTime = 0;
+unsigned long lastAlarmChange = 0;
+const unsigned long alarmDuration = 30000;
+const unsigned long beepDuration = 1000;
+const unsigned long pauseDuration = 1000;
+Alarm currentAlarm;
+bool hasActiveAlarm = false;
 
 void setup() {
   Serial.begin(115200);
@@ -138,34 +155,76 @@ void reconnect() {
 }
 
 void triggerAlarm() {
-  unsigned long startTime = millis();
-  bool interrupted = false;
-  
-  while ((millis() - startTime < 30000) && !interrupted) {
+  if (!hasActiveAlarm) {
+    hasActiveAlarm = true;
+    alarmState = ALARM_BUZZER_ON;
+    alarmStartTime = millis();
+    lastAlarmChange = millis();
     digitalWrite(BUZZER_PIN, HIGH);
     digitalWrite(LED_PIN, HIGH);
-    unsigned long toneStart = millis();
-    while (millis() - toneStart < 1000 && !interrupted) {
-      if (digitalRead(BUTTON_PIN) == LOW) {
-        interrupted = true;
-      }
-      delay(10);
-    }
-    
-    digitalWrite(BUZZER_PIN, LOW);
-    digitalWrite(LED_PIN, LOW);
-    unsigned long pauseStart = millis();
-    while (millis() - pauseStart < 1000 && !interrupted) {
-      if (digitalRead(BUTTON_PIN) == LOW) {
-        interrupted = true;
-      }
-      delay(10);
+  }
+}
+
+void updateAlarm() {
+  if (!hasActiveAlarm) return;
+
+  unsigned long currentMillis = millis();
+  
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    delay(50);
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      cancelAlarm();
+      return;
     }
   }
-  
+
+  if (currentMillis - alarmStartTime >= alarmDuration) {
+    cancelAlarm();
+    return;
+  }
+
+  switch (alarmState) {
+    case ALARM_BUZZER_ON:
+      if (currentMillis - lastAlarmChange >= beepDuration) {
+        alarmState = ALARM_BUZZER_OFF;
+        lastAlarmChange = currentMillis;
+        digitalWrite(BUZZER_PIN, LOW);
+        digitalWrite(LED_PIN, LOW);
+      }
+      break;
+      
+    case ALARM_BUZZER_OFF:
+      if (currentMillis - lastAlarmChange >= pauseDuration) {
+        alarmState = ALARM_BUZZER_ON;
+        lastAlarmChange = currentMillis;
+        digitalWrite(BUZZER_PIN, HIGH);
+        digitalWrite(LED_PIN, HIGH);
+      }
+      break;
+      
+    case ALARM_OFF:
+      break;
+  }
+}
+
+void cancelAlarm() {
+  alarmState = ALARM_OFF;
+  hasActiveAlarm = false;
   digitalWrite(BUZZER_PIN, LOW);
   digitalWrite(LED_PIN, LOW);
-  alarmActive = false;
+  
+  auto it = std::find_if(alarms.begin(), alarms.end(), 
+    [](const Alarm& a) {
+      return a.hour == currentAlarm.hour && 
+             a.minute == currentAlarm.minute && 
+             a.medicine == currentAlarm.medicine;
+    });
+  
+  if (it != alarms.end()) {
+    alarms.erase(it);
+  }
+  
+  updateDisplay(true);
 }
 
 void updateDisplay(bool forceUpdate) {
@@ -216,16 +275,17 @@ void updateDisplay(bool forceUpdate) {
 }
 
 void checkAlarms() {
+  if (hasActiveAlarm) return;
+
   timeClient.update();
   int currentHour = timeClient.getHours();
   int currentMinute = timeClient.getMinutes();
 
   for (auto it = alarms.begin(); it != alarms.end(); ) {
     if (it->hour == currentHour && it->minute == currentMinute) {
-      alarmActive = true;
+      currentAlarm = *it;
       triggerAlarm();
-      it = alarms.erase(it);
-      updateDisplay(true);
+      break;
     } else {
       ++it;
     }
@@ -240,6 +300,7 @@ void loop() {
 
   updateDisplay();
   checkAlarms();
+  updateAlarm();
 }
 
 void displayStatus(const char* message) {
